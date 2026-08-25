@@ -14,7 +14,8 @@ interface Agent {
   name: string;
   emoji: string;
   role: string;
-  status: "idle" | "working" | "error" | "offline";
+  reportsTo?: string | null;
+  status: string;
   currentTask?: string;
   lastActive?: string;
   tasksCompleted: number;
@@ -33,11 +34,13 @@ const statusConfig: Record<string, { color: string; dot: string; label: string; 
 };
 
 const roleColors: Record<string, string> = {
-  max: "from-amber-500/20 to-amber-600/5 border-amber-500/20",
-  sage: "from-sky-500/20 to-sky-600/5 border-sky-500/20",
-  knox: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/20",
-  nova: "from-purple-500/20 to-purple-600/5 border-purple-500/20",
-  pixel: "from-blue-500/20 to-blue-600/5 border-blue-500/20",
+  aria: "from-amber-500/20 to-amber-600/5 border-amber-500/20",
+  "cto-orion": "from-sky-500/20 to-sky-600/5 border-sky-500/20",
+  cloudmaster: "from-cyan-500/20 to-cyan-600/5 border-cyan-500/20",
+  foreman: "from-orange-500/20 to-orange-600/5 border-orange-500/20",
+  morgan: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/20",
+  cro: "from-purple-500/20 to-purple-600/5 border-purple-500/20",
+  dealer: "from-blue-500/20 to-blue-600/5 border-blue-500/20",
 };
 
 function timeAgo(dateStr: string): string {
@@ -114,6 +117,57 @@ function AgentCard({ agent, isExpanded, onToggle }: { agent: Agent; isExpanded: 
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Compact org-chart tree (Cards view's "Team Structure") ──
+function OrgMiniCard({ agent }: { agent: Agent }) {
+  const status = statusConfig[agent.status] || statusConfig.offline;
+  const isOffline = agent.status === "offline";
+  return (
+    <div className="flex items-center gap-2.5 rounded-[var(--r-md)] px-3.5 py-2.5"
+      style={{ background: "var(--surface-1)", border: "1px solid var(--line)", opacity: isOffline ? 0.5 : 1 }}>
+      <div className="w-6 h-6 rounded-[var(--r-sm)] flex items-center justify-center text-sm shrink-0"
+        style={{ background: "var(--surface-2)", border: "1px solid var(--line)" }}>
+        {agent.emoji}
+      </div>
+      <div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: status.dot }} />
+          <span className="text-[12px] font-semibold text-[var(--text)]">{agent.name}</span>
+        </div>
+        <div className="text-[10px] text-[var(--text-3)]">{agent.role}</div>
+      </div>
+    </div>
+  );
+}
+
+function OrgTree({ agent, agents }: { agent: Agent; agents: Agent[] }) {
+  const reports = agents.filter(a => a.reportsTo === agent.id);
+  if (!reports.length) return <OrgMiniCard agent={agent} />;
+  return (
+    <div className="flex flex-col items-center">
+      <OrgMiniCard agent={agent} />
+      <div className="w-px h-5" style={{ background: "var(--line-strong)" }} />
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-4">
+        {reports.map(child => (
+          <div key={child.id} className="flex flex-col items-center">
+            <div className="w-px h-4" style={{ background: "var(--line-strong)" }} />
+            <OrgTree agent={child} agents={agents} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OrgChart({ agents }: { agents: Agent[] }) {
+  const ceo = agents.find(a => !a.reportsTo);
+  if (!ceo) return <p className="text-[12px] text-[var(--text-3)] text-center py-4">No roster loaded.</p>;
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <OrgTree agent={ceo} agents={agents} />
     </div>
   );
 }
@@ -242,8 +296,8 @@ export default function AgentsPage() {
     );
   }
 
-  const maxAgent = agents.find(a => a.id === "max");
-  const teamAgents = agents.filter(a => a.id !== "max");
+  const ceoAgent = agents.find(a => !a.reportsTo);
+  const teamAgents = agents.filter(a => a.reportsTo && a.id !== ceoAgent?.id);
   const online = agents.filter(a => a.status !== "offline").length;
   const working = agents.filter(a => a.status === "working").length;
   const totalTasks = agents.reduce((sum, a) => sum + a.tasksCompleted, 0);
@@ -309,18 +363,18 @@ export default function AgentsPage() {
           <OfficeView agents={agents} />
           {/* Chat quick-launch strip */}
           <div className="flex flex-wrap gap-2 pt-2">
-            {agents.filter(a => a.id !== "max").map(a => (
+            {teamAgents.map(a => (
               <button key={a.id} onClick={() => setChatAgent(a)}
                 className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[12px] text-[var(--text-2)] transition-colors panel-interactive"
                 style={{ background: "var(--surface-1)", border: "1px solid var(--line)" }}>
                 <span>{a.emoji}</span> Chat with {a.name}
               </button>
             ))}
-            {agents.find(a => a.id === "max") && (
-              <button onClick={() => setChatAgent(agents.find(a => a.id === "max")!)}
+            {ceoAgent && (
+              <button onClick={() => setChatAgent(ceoAgent)}
                 className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[12px] transition-colors"
                 style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 28%, transparent)" }}>
-                🐺 Chat with Max
+                {ceoAgent.emoji} Chat with {ceoAgent.name}
               </button>
             )}
           </div>
@@ -330,12 +384,12 @@ export default function AgentsPage() {
       {/* Cards View */}
       {view === "cards" && (
         <>
-          {/* Chief of Staff (Max) — full width */}
-          {maxAgent && (
+          {/* Chief Executive (Aria) — full width */}
+          {ceoAgent && (
             <AgentCard
-              agent={maxAgent}
-              isExpanded={expandedAgent === maxAgent.id}
-              onToggle={() => setExpandedAgent(expandedAgent === maxAgent.id ? null : maxAgent.id)}
+              agent={ceoAgent}
+              isExpanded={expandedAgent === ceoAgent.id}
+              onToggle={() => setExpandedAgent(expandedAgent === ceoAgent.id ? null : ceoAgent.id)}
             />
           )}
 
@@ -354,36 +408,7 @@ export default function AgentsPage() {
           {/* Org chart visual */}
           <div className="pt-6" style={{ borderTop: "1px solid var(--line)" }}>
             <div className="eyebrow mb-5">Team Structure</div>
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex items-center gap-2.5 rounded-[var(--r-md)] px-4 py-2.5"
-                style={{ background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 24%, transparent)" }}>
-                <span className="text-xl">🐺</span>
-                <div>
-                  <div className="text-[13px] font-semibold text-[var(--text)]">Max</div>
-                  <div className="text-[10px] text-[var(--text-3)]">Chief of Staff · Orchestrator</div>
-                </div>
-              </div>
-              <div className="w-px h-6" style={{ background: "var(--line-strong)" }} />
-              <div className="flex items-center gap-0">
-                <div className="w-32 h-px" style={{ background: "var(--line-strong)" }} />
-                <div className="w-px h-4" style={{ background: "var(--line-strong)" }} />
-                <div className="w-32 h-px" style={{ background: "var(--line-strong)" }} />
-                <div className="w-px h-4" style={{ background: "var(--line-strong)" }} />
-                <div className="w-32 h-px" style={{ background: "var(--line-strong)" }} />
-              </div>
-              <div className="flex flex-wrap justify-center gap-3">
-                {teamAgents.map(agent => (
-                  <div key={agent.id} className="flex items-center gap-2.5 rounded-[var(--r-md)] px-3.5 py-2.5"
-                    style={{ background: "var(--surface-1)", border: "1px solid var(--line)", opacity: agent.status === "offline" ? 0.5 : 1 }}>
-                    <span className="text-lg">{agent.emoji}</span>
-                    <div>
-                      <div className="text-[12px] font-semibold text-[var(--text)]">{agent.name}</div>
-                      <div className="text-[10px] text-[var(--text-3)]">{agent.role}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <OrgChart agents={agents} />
           </div>
         </>
       )}
