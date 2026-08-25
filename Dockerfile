@@ -3,8 +3,11 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# install ALL deps (devDeps needed for prisma + next build)
+# install ALL deps (devDeps needed for prisma + next build).
+# prisma/ must be present first: npm ci runs the postinstall script
+# (`prisma generate`), which needs prisma/schema.prisma to exist.
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
 RUN npm ci --no-audit --no-fund
 
 # generate Prisma client + build
