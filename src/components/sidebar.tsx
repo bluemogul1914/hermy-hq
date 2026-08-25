@@ -5,62 +5,40 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   Home,
-  Twitter,
-  Play,
   Bot,
-  Lightbulb,
-  Flower2,
-  FileText,
   ClipboardList,
   HeartPulse,
   Cpu,
   BookOpen,
-  Workflow,
   Menu,
   X,
 } from "lucide-react";
 
 const navGroups = [
   {
-    name: "Overview",
+    name: "Operate",
     items: [
       { href: "/", label: "Dashboard", icon: Home },
-      { href: "/hermes", label: "Hermes", icon: Cpu },
+      { href: "/hermes", label: "Agent", icon: Cpu },
       { href: "/tasks", label: "Tasks", icon: ClipboardList },
     ],
   },
   {
-    name: "Content",
-    items: [
-      { href: "/x", label: "X", icon: Twitter },
-      { href: "/content-os", label: "Pipeline", icon: Workflow },
-      { href: "/articles", label: "Articles", icon: FileText },
-      { href: "/youtube", label: "YouTube", icon: Play },
-    ],
-  },
-  {
-    name: "Data",
+    name: "Business",
     items: [
       { href: "/client-pulse", label: "Client Pulse", icon: HeartPulse },
-    ],
-  },
-  {
-    name: "System",
-    items: [
       { href: "/agents", label: "Agents", icon: Bot },
       { href: "/memory-wiki", label: "Memory Wiki", icon: BookOpen },
-      { href: "/ideas", label: "Ideas", icon: Lightbulb },
-      { href: "/garden", label: "Garden", icon: Flower2 },
     ],
   },
 ];
 
-// Mobile tab bar - only show the 5 most important
+// Mobile tab bar - only show the most important
 const mobileTabsRaw = [
   { href: "/", label: "Dashboard", icon: Home },
-  { href: "/x", label: "X", icon: Twitter },
-  { href: "/youtube", label: "YouTube", icon: Play },
-  { href: "/ideas", label: "Ideas", icon: Lightbulb },
+  { href: "/hermes", label: "Agent", icon: Cpu },
+  { href: "/tasks", label: "Tasks", icon: ClipboardList },
+  { href: "/client-pulse", label: "Clients", icon: HeartPulse },
   { href: "/agents", label: "Agents", icon: Bot },
 ];
 
@@ -88,7 +66,7 @@ export function Sidebar() {
       <div className="w-8 h-8 rounded-[10px] bg-[var(--text)] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]">
         <span className="text-[#0a0b0d] font-bold text-[13px] tracking-tight">H</span>
       </div>
-      <span className="font-semibold text-[var(--text)] tracking-[-0.01em] text-[15px]">Hermy HQ</span>
+      <span className="font-semibold text-[var(--text)] tracking-[-0.01em] text-[15px]">Blue Mogul AI</span>
     </div>
   );
 

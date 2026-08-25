@@ -11,9 +11,9 @@ export default function LoginPage() {
             M
           </div>
           <h1 className="mt-5 text-[20px] font-semibold tracking-[-0.015em] text-[var(--text)]">
-            Hermy HQ
+            Blue Mogul AI
           </h1>
-          <p className="eyebrow mt-2">Sign in to continue</p>
+          <p className="eyebrow mt-2">Blue Mogul — Mission Control</p>
         </div>
 
         <div className="rule my-7" />
