@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getMarketingSkillsContext } from '@/lib/marketing-skills';
+
 interface AgentChatRequest {
   agentId: string;
   message: string;
@@ -44,6 +46,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<AgentChat
     const systemPrompt = AGENT_PROMPTS[agentId];
     const apiKey = process.env.OPENROUTER_API_KEY;
 
+    // Morgan (Sales) gets the marketing skills library loaded into context so it
+    // can apply real marketing/sales playbooks (pipeline, proposals, ARR, pricing).
+    let enrichedPrompt = systemPrompt;
+    if (agentId === "morgan") {
+      const { index, core } = getMarketingSkillsContext();
+      enrichedPrompt = `${systemPrompt}\n\n# Marketing Skills Library (always available, choose the right playbook)\n${index}${core ? `\n\n${core}` : ""}`;
+    }
+
     if (!apiKey) {
       console.error('OPENROUTER_API_KEY not configured');
       return NextResponse.json(
@@ -69,7 +79,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AgentChat
       body: JSON.stringify({
         model: 'anthropic/claude-haiku-4-5',
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: enrichedPrompt },
           ...messages,
         ],
         max_tokens: 800,
