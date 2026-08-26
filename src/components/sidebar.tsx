@@ -12,6 +12,14 @@ import {
   BookOpen,
   Menu,
   X,
+  Target,
+  Kanban,
+  Sparkles,
+  Boxes,
+  Users,
+  Wallet,
+  Activity,
+  Briefcase,
 } from "lucide-react";
 
 const navGroups = [
@@ -21,6 +29,24 @@ const navGroups = [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/hermes", label: "Agent", icon: Cpu },
       { href: "/tasks", label: "Tasks", icon: ClipboardList },
+      { href: "/goals", label: "Goals", icon: Target },
+      { href: "/projects", label: "Projects", icon: Kanban },
+    ],
+  },
+  {
+    name: "Setup",
+    items: [
+      { href: "/skills", label: "Skills", icon: Sparkles },
+      { href: "/workspaces", label: "Workspaces", icon: Briefcase },
+      { href: "/artifacts", label: "Artifacts", icon: Boxes },
+    ],
+  },
+  {
+    name: "Company",
+    items: [
+      { href: "/org", label: "Org", icon: Users },
+      { href: "/cost", label: "Cost", icon: Wallet },
+      { href: "/activity", label: "Activity", icon: Activity },
     ],
   },
   {
@@ -38,8 +64,8 @@ const mobileTabsRaw = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/hermes", label: "Agent", icon: Cpu },
   { href: "/tasks", label: "Tasks", icon: ClipboardList },
+  { href: "/goals", label: "Goals", icon: Target },
   { href: "/client-pulse", label: "Clients", icon: HeartPulse },
-  { href: "/agents", label: "Agents", icon: Bot },
 ];
 
 export function Sidebar() {
