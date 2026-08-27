@@ -89,32 +89,72 @@ const DEFAULT_AGENTS = [
 ];
 
 export async function GET() {
-  try {
-    const states = await prisma.agentState.findMany();
-    const stateMap: Record<string, any> = {};
-    for (const s of states) {
-      stateMap[s.id] = s;
-    }
+  // Single source of truth: the LIVE Mission Control fleet (/api/status).
+  // Same endpoint the Org (/org) board reads, so both boards always agree.
+  const MC_BASE = process.env.MC_URL || "https://mission-control.bluemogul.us";
+  const MC_TOKEN = process.env.MC_AUTH_TOKEN || "";
+  const order: Record<string, number> = { green: 0, yellow: 1, red: 2, grey: 3 };
+  const statusFromHealth: Record<string, string> = {
+    green: "online",
+    yellow: "idle",
+    red: "offline",
+    grey: "offline",
+  };
+  const byDefault = new Map<string, any>(DEFAULT_AGENTS.map((a) => [a.id, a]));
 
-    const agents = DEFAULT_AGENTS.map((agent) => {
-      const s = stateMap[agent.id] || {};
+  try {
+    const res = await fetch(`${MC_BASE}/api/status`, {
+      headers: { "x-mc-token": MC_TOKEN },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.error("Agents API: MC upstream", res.status);
+      // Fall back to the taxonomy roster, explicitly marked offline (unverified).
+      return NextResponse.json(
+        DEFAULT_AGENTS.map((a) => ({ ...a, status: "offline" })),
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const statuses: any[] = await res.json();
+    const agents: any[] = statuses.map((s) => {
+      const id = String(s.agent_name).toLowerCase();
+      const def = byDefault.get(id);
       return {
-        ...agent,
-        status: s.status || agent.status,
-        currentTask: s.currentTask || undefined,
-        lastActive: s.lastActive || undefined,
-        tasksCompleted: s.tasksCompleted || agent.tasksCompleted,
-        totalCost: s.totalCost || agent.totalCost,
-        recentActivity: s.recentActivity || agent.recentActivity,
+        id,
+        name: def?.name || s.agent_name,
+        emoji: def?.emoji || "🤖",
+        role: def?.role || "Agent",
+        reportsTo: def?.reportsTo ?? "aria",
+        status: statusFromHealth[s.health] || s.status || "offline",
+        currentTask: s.current_task ?? undefined,
+        lastActive: s.last_heartbeat ?? undefined,
+        secondsSinceHeartbeat: Number(s.seconds_since_heartbeat),
+        tasksCompleted: def?.tasksCompleted ?? 0,
+        totalCost: 0,
+        recentActivity: [],
       };
     });
-
+    // Keep the org-chart connected: re-point dangling `reportsTo` (e.g.
+    // CLOUDMASTER → cto-orion, which isn't a live MC identity) at the CEO
+    // so every card renders under a real node instead of being orphaned.
+    const ids = new Set(agents.map((a) => a.id));
+    for (const a of agents) {
+      if (a.reportsTo != null && !ids.has(a.reportsTo)) a.reportsTo = "aria";
+    }
+    // Ensure exactly one root (CEO) so the office-chart tree renders cleanly.
+    const root = agents.find((a: any) => a.reportsTo == null);
+    const ceo = root ?? (agents.find((a: any) => a.id === "aria") as any) ?? agents[0];
+    if (ceo) ceo.reportsTo = undefined;
+    agents.sort((a: any, b: any) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
     return NextResponse.json(agents, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     });
-  } catch (error) {
-    console.error("Agents API error:", error);
-    return NextResponse.json(DEFAULT_AGENTS, { status: 200 });
+  } catch (err) {
+    console.error("Agents API error:", String(err));
+    return NextResponse.json(
+      DEFAULT_AGENTS.map((a) => ({ ...a, status: "offline" })),
+      { headers: { "Cache-Control": "no-store" }, status: 200 },
+    );
   }
 }
 
