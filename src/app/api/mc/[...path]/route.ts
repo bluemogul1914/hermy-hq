@@ -29,6 +29,72 @@ const READ_ONLY = new Set([
   "tasks/stale",
 ]);
 
+// Whitelist of Mission Control write actions the cockpit may invoke.
+// Only the exact patterns below are forwarded as POST — the MC token never
+// reaches the browser. Approve = Tracey/approver action; Start = kickoff.
+function isAllowedAction(rel: string): boolean {
+  // tasks/<id>/start , tasks/<id>/approve , tasks/<id>/reject
+  const m = rel.match(/^tasks\/(\d+)\/(start|approve|reject)$/);
+  if (!m) return false;
+  const action = m[2];
+  // reject is a write that needs a reason+approver; allow it too (approval gate)
+  return action === "start" || action === "approve" || action === "reject";
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  const { path } = await params;
+  const rel = path.join("/");
+  if (!isAllowedAction(rel)) {
+    return NextResponse.json(
+      { error: `write proxy for /api/mc/${rel} is not allowed` },
+      { status: 403 }
+    );
+  }
+  let body: unknown = {};
+  try {
+    body = await req.json();
+  } catch {
+    /* empty body ok */
+  }
+  const url = `${MC_BASE}/api/${rel}`;
+  try {
+    const upstream = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mc-token": MC_TOKEN,
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      return NextResponse.json(
+        { error: `Mission Control upstream returned ${upstream.status}`, detail: text },
+        { status: upstream.status }
+      );
+    }
+    try {
+      return NextResponse.json(JSON.parse(text), {
+        headers: { "Cache-Control": "no-store, no-cache" },
+      });
+    } catch {
+      return new NextResponse(text, {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+  } catch (err) {
+    return NextResponse.json(
+      { error: "mission control unreachable", detail: String(err) },
+      { status: 502 }
+    );
+  }
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }

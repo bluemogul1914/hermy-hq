@@ -56,11 +56,66 @@ function timeAgo(d: string): string {
   return `${days}d`;
 }
 
+// POST an MC action through the read/write proxy (approve/start/reject).
+// Payload keys mirror what MC's server.js expects.
+async function mcAction(
+  taskId: number,
+  action: "approve" | "reject" | "start",
+  payload: Record<string, unknown>,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/mc/tasks/${taskId}/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = (await res.json()) as { error?: string };
+      detail = j.error || detail;
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: detail };
+  }
+  return { ok: true };
+}
+
 export default function DashboardPage() {
   const [dash, setDash] = useState<Dash | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [acting, setActing] = useState<number | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  async function reload() {
+    const [d, b] = await Promise.all([
+      mcGetSafe<Dash>("/dashboard"),
+      mcGetSafe<Board>("/board"),
+    ]);
+    if (d) setDash(d);
+    if (b) setBoard(b);
+  }
+
+  async function actOn(
+    taskId: number,
+    assignee: string | null,
+    col: string,
+    action: "approve" | "reject" | "start",
+  ) {
+    if (acting !== null) return;
+    setActing(taskId);
+    setActionMsg(null);
+    let payload: Record<string, unknown> = {};
+    if (action === "approve") payload = { approver: "tracey" };
+    if (action === "start") payload = { agent_name: assignee || "CLOUDMASTER" };
+    if (action === "reject") payload = { reason: "Not approved", approver: "tracey" };
+    const r = await mcAction(taskId, action, payload);
+    if (col !== "pending_approval") await reload(); else await reload();
+    setActing(null);
+    setActionMsg(r.ok ? `#${taskId} ${action}d` : `#${taskId} ${action} failed: ${r.error}`);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -178,6 +233,11 @@ export default function DashboardPage() {
         {/* Board columns (right rail) */}
         <div className="space-y-4 hq-rise" style={rise(1)}>
           <div className="eyebrow px-1">Board</div>
+          {actionMsg && (
+            <p className="px-1 text-[12px]" style={{ color: actionMsg.includes("failed") ? "var(--down)" : "var(--up)" }}>
+              {actionMsg}
+            </p>
+          )}
           {COLUMN_ORDER.map((col) => {
             const tasks = board?.[col] ?? [];
             return (
@@ -189,17 +249,51 @@ export default function DashboardPage() {
                 {tasks.length === 0 ? (
                   <p className="text-[12px] text-[var(--text-4)]">Empty</p>
                 ) : (
-                  <div className="space-y-1.5">
-                    {tasks.slice(0, 4).map((t) => (
-                      <div key={t.id} className="text-[12.5px] leading-tight">
-                        <span className="text-[var(--text)]">{t.title}</span>
-                        {t.assignee && (
-                          <span className="text-[var(--text-4)]"> · {t.assignee}</span>
-                        )}
+                  <div className="space-y-2.5">
+                    {tasks.slice(0, 8).map((t) => (
+                      <div key={t.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-1)] p-2.5">
+                        <div className="text-[12.5px] leading-tight">
+                          <span className="text-[var(--text)]">{t.title}</span>
+                          {t.assignee && (
+                            <span className="text-[var(--text-4)]"> · {t.assignee}</span>
+                          )}
+                        </div>
+                        <div className="flex gap-1.5 mt-2 flex-wrap">
+                          {col === "pending_approval" && (
+                            <>
+                              <button
+                                className="text-[11px] px-2 py-1 rounded-[var(--r-sm)] font-medium"
+                                style={{ background: "var(--up)", color: "var(--surface-0)" }}
+                                onClick={() => actOn(Number(t.id), t.assignee, col, "approve")}
+                                disabled={acting === t.id}
+                              >
+                                {acting === t.id ? "…" : "✓ Approve"}
+                              </button>
+                              <button
+                                className="text-[11px] px-2 py-1 rounded-[var(--r-sm)] font-medium"
+                                style={{ background: "var(--surface-2)", color: "var(--text-2)" }}
+                                onClick={() => actOn(Number(t.id), t.assignee, col, "reject")}
+                                disabled={acting === t.id}
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {col === "assigned" && (
+                            <button
+                              className="text-[11px] px-2 py-1 rounded-[var(--r-sm)] font-medium"
+                              style={{ background: "var(--accent)", color: "var(--surface-0)" }}
+                              onClick={() => actOn(Number(t.id), t.assignee, col, "start")}
+                              disabled={acting === t.id}
+                            >
+                              {acting === t.id ? "…" : "Start"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
-                    {tasks.length > 4 && (
-                      <p className="text-[11.5px] text-[var(--text-4)]">+{tasks.length - 4} more</p>
+                    {tasks.length > 8 && (
+                      <p className="text-[11.5px] text-[var(--text-4)]">+{tasks.length - 8} more</p>
                     )}
                   </div>
                 )}
