@@ -117,11 +117,46 @@ async function mirrorCrons() {
   } catch (e) { log("cron list failed:", e.message.split("\n")[0]); }
 }
 
+function parseInsights(out) {
+  const num = (re) => {
+    const m = out.match(re);
+    return m ? Number(String(m[1]).replace(/,/g, "")) : null;
+  };
+  const models = [];
+  const inModels = /Model\s+Sessions\s+Tokens/i.test(out);
+  if (inModels) {
+    const after = out.slice(out.search(/Model\s+Sessions\s+Tokens/i));
+    for (const line of after.split("\n").slice(1)) {
+      const m = line.match(/^\s{2}(\S+)\s+(\d+)\s+([\d,]+)\s*$/);
+      if (!m) { if (line.trim() === "") continue; else if (models.length) break; else continue; }
+      models.push({ model: m[1], sessions: Number(m[2]), tokens: Number(m[3].replace(/,/g, "")) });
+    }
+  }
+  const periodM = out.match(/Period:\s*([^\n]+)/);
+  return {
+    period: periodM ? periodM[1].trim() : null,
+    sessions: num(/Sessions:\s+([\d,]+)/),
+    messages: num(/Messages:\s+([\d,]+)/),
+    toolCalls: num(/Tool calls:\s+([\d,]+)/),
+    inputTokens: num(/Input tokens:\s+([\d,]+)/),
+    outputTokens: num(/Output tokens:\s+([\d,]+)/),
+    totalTokens: num(/Total tokens:\s+([\d,]+)/),
+    estimatedUsd: num(/Estimated:\s*~?\$([\d,.]+)/),
+    models: models.slice(0, 12),
+  };
+}
+
 async function mirrorCost() {
   for (const args of [["insights", "--days", "7"], ["insights"]]) {
     try {
       const out = await hermes(args, { timeout: 15000 });
-      await setStore("hermes-cost", { summary: out.slice(0, 4000), syncedAt: new Date().toISOString() });
+      const days = args.includes("--days") ? Number(args[args.indexOf("--days") + 1]) : 30;
+      await setStore("hermes-cost", {
+        days,
+        parsed: parseInsights(out),
+        summary: out.slice(0, 4000),
+        syncedAt: new Date().toISOString(),
+      });
       return;
     } catch { /* try next arg shape */ }
   }
