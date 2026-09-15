@@ -45,3 +45,9 @@ yarn-error.log*
 next-env.d.ts
 .env*.local
 /services/client-pulse-bot/dist/
+
+# bridge runtime (the bridge runs on the host next to Hermes)
+hermes-bridge/node_modules/
+hermes-bridge/.env.bridge
+DATABASE_URL.mine
+.env.real-bak

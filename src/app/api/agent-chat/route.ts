@@ -44,7 +44,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<AgentChat
     }
 
     const systemPrompt = AGENT_PROMPTS[agentId];
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    // Provider: Nous Portal (OpenAI-compatible) is the fleet standard.
+    // OpenRouter is deprecated — kept only as a fallback if no Nous key is set.
+    const nousKey = process.env.NOUS_API_KEY;
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = nousKey || openrouterKey;
+    const baseUrl =
+      process.env.AGENT_CHAT_BASE_URL ||
+      (nousKey ? "https://inference-api.nousresearch.com/v1" : "https://openrouter.ai/api/v1");
+    const model =
+      process.env.AGENT_CHAT_MODEL ||
+      (nousKey ? "deepseek/deepseek-v4-flash-0731" : "anthropic/claude-haiku-4-5");
 
     // Morgan (Sales) gets the marketing skills library loaded into context so it
     // can apply real marketing/sales playbooks (pipeline, proposals, ARR, pricing).
@@ -55,7 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AgentChat
     }
 
     if (!apiKey) {
-      console.error('OPENROUTER_API_KEY not configured');
+      console.error('No AI provider key configured (set NOUS_API_KEY)');
       return NextResponse.json(
         { error: 'API configuration error' },
         { status: 500 }
@@ -68,16 +78,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<AgentChat
       { role: 'user' as const, content: message },
     ];
 
-    // Call OpenRouter API
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://your-app.vercel.app',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-haiku-4-5',
+        model,
         messages: [
           { role: 'system', content: enrichedPrompt },
           ...messages,
@@ -88,7 +96,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AgentChat
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('OpenRouter API error:', error);
+      console.error('Agent chat provider error:', baseUrl, error);
       return NextResponse.json(
         { error: 'Failed to get response from AI model' },
         { status: 500 }

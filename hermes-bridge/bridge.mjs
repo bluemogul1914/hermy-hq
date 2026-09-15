@@ -212,6 +212,93 @@ async function gitCommitWiki(msg) {
   } catch { /* ignore */ }
 }
 
+/* ─────────────── Skills mirror + write ─────────────── */
+const SKILLS_DIR = process.env.HERMES_SKILLS || path.join(os.homedir(), ".hermes", "skills");
+
+function parseSkillFrontmatter(md) {
+  const m = md.match(/^---\n([\s\S]*?)\n---/);
+  const fm = {};
+  if (m) {
+    for (const line of m[1].split("\n")) {
+      const kv = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
+      if (!kv) continue;
+      let v = kv[2].trim().replace(/^["']|["']$/g, "");
+      fm[kv[1]] = v;
+    }
+  }
+  const bodyStart = m ? m[0].length : 0;
+  const body = md.slice(bodyStart).trim();
+  return { fm, body };
+}
+
+function walkSkillDirs(dir, depth, acc) {
+  if (depth > 3) return acc;
+  let entries = [];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
+  for (const e of entries) {
+    if (e.name.startsWith(".")) continue;
+    const full = path.join(dir, e.name);
+    if (!e.isDirectory()) continue;
+    const skillMd = path.join(full, "SKILL.md");
+    if (fs.existsSync(skillMd)) {
+      let raw = ""; try { raw = fs.readFileSync(skillMd, "utf8"); } catch { /* skip */ }
+      const { fm } = parseSkillFrontmatter(raw);
+      const parts = path.relative(SKILLS_DIR, full).split(path.sep);
+      acc.push({
+        name: fm.name || e.name,
+        slug: e.name,
+        category: parts.length > 1 ? parts[0] : null,
+        path: path.relative(SKILLS_DIR, full),
+        description: fm.description || "",
+        version: fm.version || null,
+        bytes: raw.length,
+      });
+    }
+    walkSkillDirs(full, depth + 1, acc);
+  }
+  return acc;
+}
+
+async function mirrorSkills() {
+  try {
+    if (!fs.existsSync(SKILLS_DIR)) { await setStore("hermes-skills", { skills: [], syncedAt: new Date().toISOString() }); return; }
+    const skills = walkSkillDirs(SKILLS_DIR, 0, []);
+    skills.sort((a, b) => a.slug.localeCompare(b.slug));
+    await setStore("hermes-skills", { skills, base: SKILLS_DIR, syncedAt: new Date().toISOString() });
+  } catch (e) { log("mirrorSkills err", e.message.split("\n")[0]); }
+}
+
+function writeSkill(e) {
+  const slug = String(e.slug || e.name || "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  if (!slug) throw new Error("skill slug required");
+  const category = e.category ? String(e.category).replace(/[^a-zA-Z0-9_-]/g, "") : "";
+  const rel = category ? path.join(category, slug) : slug;
+  const dir = path.join(SKILLS_DIR, rel);
+  fs.mkdirSync(dir, { recursive: true });
+  const desc = String(e.description || "").replace(/\n/g, " ");
+  const lines = [
+    "---",
+    `name: ${slug}`,
+    `description: ${desc}`,
+    `version: ${e.version || "1.0.0"}`,
+    "---",
+    "",
+    String(e.body || "").trim(),
+    "",
+  ];
+  fs.writeFileSync(path.join(dir, "SKILL.md"), lines.join("\n"), "utf8");
+  return rel;
+}
+
+function deleteSkill(e) {
+  const rel = String(e.path || e.slug || "").replace(/\.\./g, "").replace(/^\/+/, "");
+  if (!rel) throw new Error("skill path required");
+  const dir = path.join(SKILLS_DIR, rel);
+  if (!dir.startsWith(SKILLS_DIR)) throw new Error("refusing to delete outside skills dir");
+  fs.rmSync(dir, { recursive: true, force: true });
+  return rel;
+}
+
 /* ─────────────── Chief-of-staff daily brief ─────────────── */
 async function generateBriefing() {
   const raw = (await hermes(["-z", BRIEF_PROMPT], { timeout: RUN_TIMEOUT_MS })).trim();
@@ -264,6 +351,16 @@ async function runRequest(r) {
       await gitCommitWiki(`wiki: update ${rel} (via dashboard)`);
       await mirrorWiki();
       result = `wrote ${rel}`;
+    } else if (r.kind === "skill.write") {
+      const e = JSON.parse(r.prompt || "{}");
+      const rel = writeSkill(e);
+      await mirrorSkills();
+      result = `wrote skill ${rel}`;
+    } else if (r.kind === "skill.delete") {
+      const e = JSON.parse(r.prompt || "{}");
+      const rel = deleteSkill(e);
+      await mirrorSkills();
+      result = `deleted skill ${rel}`;
     } else if (r.kind === "briefing.generate") {
       await generateBriefing();
       lastBriefDate = new Date().toISOString().slice(0, 10);
@@ -296,6 +393,7 @@ async function mirrorTick() {
   try { await mirrorHealth(); } catch (e) { log("mirrorHealth err", e.message); }
   try { await mirrorWiki(); } catch (e) { log("mirrorWiki err", e.message); }
   try { await mirrorCost(); } catch (e) { log("mirrorCost err", e.message); }
+  try { await mirrorSkills(); } catch (e) { log("mirrorSkills err", e.message); }
   try { await maybeDailyBrief(); } catch (e) { log("maybeDailyBrief err", e.message); }
 }
 

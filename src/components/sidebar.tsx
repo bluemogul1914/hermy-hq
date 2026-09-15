@@ -20,6 +20,10 @@ import {
   Wallet,
   Activity,
   Briefcase,
+  MessagesSquare,
+  LayoutDashboard,
+  Gauge,
+  ExternalLink,
 } from "lucide-react";
 
 const navGroups = [
@@ -55,6 +59,16 @@ const navGroups = [
       { href: "/client-pulse", label: "Client Pulse", icon: HeartPulse },
       { href: "/agents", label: "Agents", icon: Bot },
       { href: "/memory-wiki", label: "Memory Wiki", icon: BookOpen },
+    ],
+  },
+  {
+    // Peer surfaces — separate apps in the Blue Mogul stack.
+    name: "Peers",
+    external: true,
+    items: [
+      { href: "https://hermes.bluemogul.us", label: "Hermes Dashboard", icon: LayoutDashboard },
+      { href: "https://bmai.bluemogul.us", label: "BM AI — Chat", icon: MessagesSquare },
+      { href: "https://mission-control.bluemogul.us", label: "Mission Control", icon: Gauge },
     ],
   },
 ];
@@ -172,29 +186,43 @@ export function Sidebar() {
                 </h3>
                 <div className="space-y-0.5">
                   {group.items.map((item) => {
+                    const isExternal = item.href.startsWith("http");
                     const isActive =
-                      pathname === item.href || pathname.startsWith(item.href + "/");
+                      !isExternal &&
+                      (pathname === item.href || pathname.startsWith(item.href + "/"));
                     const Icon = item.icon;
+                    const itemClass = `group relative flex items-center gap-3 px-3 py-[7px] rounded-[10px] transition-all duration-150 ${
+                      isActive
+                        ? "bg-[var(--surface-2)] text-[var(--text)]"
+                        : "text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface-1)]"
+                    }`;
+                    const inner = (
+                      <>
+                        {isActive && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-[var(--accent)]" />
+                        )}
+                        <Icon
+                          className={`w-[17px] h-[17px] shrink-0 ${
+                            isActive ? "text-[var(--text)]" : "text-[var(--text-3)] group-hover:text-[var(--text-2)]"
+                          }`}
+                        />
+                        <span className="text-[13.5px] font-medium">{item.label}</span>
+                        {isExternal && (
+                          <ExternalLink className="w-[12px] h-[12px] ml-auto shrink-0 text-[var(--text-4)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                      </>
+                    );
                     return (
                       <div key={item.href}>
-                        <Link
-                          href={item.href}
-                          className={`group relative flex items-center gap-3 px-3 py-[7px] rounded-[10px] transition-all duration-150 ${
-                            isActive
-                              ? "bg-[var(--surface-2)] text-[var(--text)]"
-                              : "text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface-1)]"
-                          }`}
-                        >
-                          {isActive && (
-                            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-[var(--accent)]" />
-                          )}
-                          <Icon
-                            className={`w-[17px] h-[17px] shrink-0 ${
-                              isActive ? "text-[var(--text)]" : "text-[var(--text-3)] group-hover:text-[var(--text-2)]"
-                            }`}
-                          />
-                          <span className="text-[13.5px] font-medium">{item.label}</span>
-                        </Link>
+                        {isExternal ? (
+                          <a href={item.href} target="_blank" rel="noopener noreferrer" className={itemClass}>
+                            {inner}
+                          </a>
+                        ) : (
+                          <Link href={item.href} className={itemClass}>
+                            {inner}
+                          </Link>
+                        )}
                         {"anchors" in group &&
                           isActive &&
                           (group as { anchors?: { href: string; label: string }[] }).anchors && (
