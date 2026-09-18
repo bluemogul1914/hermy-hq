@@ -15,6 +15,12 @@
  * Requires: the `hermes` binary on PATH, and env DATABASE_URL.
  * Optional env: HERMES_BOARD (default "default"), BRIDGE_POLL_MS (5000),
  *               BRIDGE_MIRROR_MS (30000), HERMES_BIN (default "hermes").
+ *
+ * MISSION CONTROL (source of truth): when MC_URL + MC_AUTH_TOKEN are set,
+ * mirrorMissionControl() additionally mirrors the live MC task board and goal
+ * tree. MC is where Blue Mogul work is actually written (goals, MRR milestones,
+ * evidence, approvals); the Hermes kanban is unused, so mirroring only the
+ * kanban leaves this cockpit empty. Set MC_MIRROR=0 to disable.
  */
 import pg from "pg";
 import { execFile } from "node:child_process";
@@ -32,13 +38,29 @@ const MIRROR_MS = Number(process.env.BRIDGE_MIRROR_MS || 30000);
 const RUN_TIMEOUT_MS = Number(process.env.BRIDGE_RUN_TIMEOUT_MS || 240000);
 const WIKI_DIR = process.env.HERMES_WIKI || path.join(os.homedir(), ".hermes", "wiki");
 const BRIEF_HOUR = Number(process.env.BRIEF_HOUR || 8);   // local hour to auto-generate the daily brief
+
+// ── Mission Control (the real work board) ────────────────────────────────
+// MC_URL/MC_AUTH_TOKEN come from the agent dotenv; MC_MIRROR=0 disables.
+const MC_URL = String(process.env.MC_URL || "").replace(/\/+$/, "");
+const MC_TOKEN = process.env.MC_AUTH_TOKEN || "";
+const MC_MIRROR = process.env.MC_MIRROR !== "0" && !!MC_URL && !!MC_TOKEN;
+const MC_BOARD = process.env.MC_BOARD || "bm-mc";
+// MC statuses → the vocabulary the cockpit widget already renders.
+const MC_STATUS = { assigned: "ready", in_progress: "running", pending_approval: "review", blocked: "blocked", done: "done" };
+const MC_PRIORITY = { high: 3, medium: 2, low: 1 };
+const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 const BRIEF_PROMPT =
-  "You are the operator's chief of staff. Produce today's brief. Read your memory wiki open-loops " +
-  "(~/.hermes/wiki), the kanban board, and recent activity. Output ONLY valid JSON (no prose, no code fences) " +
+  "You are the operator's chief of staff for Blue Mogul Enterprise. Produce today's brief. " +
+  "READ THE REAL WORK BOARD FIRST by running these in your terminal: " +
+  "`/opt/mission-control/mc-cli.sh board` (all tasks by lane) and `/opt/mission-control/mc-cli.sh goals` " +
+  "(the North Star / MRR goal tree). Mission Control is the source of truth for Blue Mogul work — " +
+  "there is no meaningful Hermes kanban. Also read your memory wiki open-loops (~/.hermes/wiki). " +
+  "Output ONLY valid JSON (no prose, no code fences) " +
   'in exactly this shape: {"greeting":"one warm line","summary":"2-3 sentences on where things stand",' +
   '"sections":[{"label":"Needs your decision","items":["..."]},{"label":"Top priorities","items":["..."]},' +
   '{"label":"Recently shipped","items":["..."]},{"label":"Next actions","items":["..."]}]}. ' +
-  "Keep every item short, concrete, and specific. Omit a section if it has nothing.";
+  "Every item must be short, concrete, and specific — name the task id or the agent. " +
+  "Lead with anything blocked or overdue against an MRR milestone. Omit a section if it has nothing.";
 let lastBriefDate = null;
 
 const DB_URL = process.env.DATABASE_URL || "";
@@ -107,6 +129,61 @@ async function mirrorKanban() {
   } else {
     await q(`DELETE FROM "HermesTask" WHERE board=$1`, [BOARD]);
   }
+}
+
+/* ─────────── PULL: Mission Control (source of truth) → Postgres ───────────
+ * The Hermes kanban is unused; real Blue Mogul work lives in Mission Control.
+ * Without this, the cockpit's board has nothing to render.
+ */
+async function mcGet(pathname) {
+  const res = await fetch(`${MC_URL}${pathname}`, {
+    headers: { "x-mc-token": MC_TOKEN, "user-agent": UA, accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`${pathname} -> HTTP ${res.status}`);
+  return res.json();
+}
+
+async function mirrorMissionControl() {
+  if (!MC_MIRROR) return;
+
+  let board;
+  try { board = await mcGet("/api/board"); }
+  catch (e) { log("MC board failed:", e.message); return; }
+
+  const tasks = Object.values(board || {}).flat().filter((t) => t && t.id != null);
+  const seen = new Set();
+  for (const t of tasks) {
+    const id = `mc-${t.id}`;                    // namespaced so the kanban prune can't collide
+    seen.add(id);
+    const lane = String(t.status || "assigned");
+    await q(
+      `INSERT INTO "HermesTask" (id, board, title, assignee, status, priority, result, "updatedAt", "syncedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7, now(), now())
+       ON CONFLICT (id) DO UPDATE SET
+         title=EXCLUDED.title, assignee=EXCLUDED.assignee, status=EXCLUDED.status,
+         priority=EXCLUDED.priority, result=EXCLUDED.result, "syncedAt"=now()`,
+      [
+        id,
+        MC_BOARD,
+        String(t.title ?? "untitled").slice(0, 300),
+        t.assignee ?? null,
+        MC_STATUS[lane] || lane,
+        MC_PRIORITY[String(t.priority || "medium")] ?? 2,
+        (t.evidence || t.block_reason || (t.goal_id ? `goal:${t.goal_id}` : null))?.slice?.(0, 2000) ?? null,
+      ]
+    );
+  }
+  if (seen.size) await q(`DELETE FROM "HermesTask" WHERE board=$1 AND id <> ALL($2::text[])`, [MC_BOARD, [...seen]]);
+  else await q(`DELETE FROM "HermesTask" WHERE board=$1`, [MC_BOARD]);
+
+  // Goal tree (MRR milestones + service lines) → DataStore for the cockpit UI.
+  try {
+    const goals = await mcGet("/api/goals");
+    await setStore("mc-goals", { goals, syncedAt: new Date().toISOString() });
+  } catch (e) { log("MC goals failed:", e.message); }
+
+  return tasks.length;
 }
 
 async function mirrorCrons() {
@@ -344,6 +421,20 @@ async function generateBriefing() {
     brief = JSON.parse(m ? m[0] : jsonStr);
   } catch { brief = { summary: raw.slice(0, 1500), sections: [] }; }
   brief.generatedAt = new Date().toISOString();
+  // Normalise section shape — the model sometimes emits the empty template stub,
+  // or nests items under different keys. Drop any section with no label or no items.
+  if (Array.isArray(brief.sections)) {
+    brief.sections = brief.sections
+      .map((s) => ({
+        label: String(s?.label ?? s?.title ?? s?.heading ?? "").trim(),
+        items: (Array.isArray(s?.items) ? s.items : Array.isArray(s?.content) ? s.content : [])
+          .map((i) => String(typeof i === "string" ? i : i?.text ?? i?.title ?? "").trim())
+          .filter(Boolean),
+      }))
+      .filter((s) => s.label && s.items.length);
+  } else {
+    brief.sections = [];
+  }
   await setStore("hermes-briefing", brief);
   await emit("status", "Daily brief generated", { level: "up" });
 }
@@ -424,6 +515,7 @@ async function processQueue() {
 /* ─────────────── loops ─────────────── */
 async function mirrorTick() {
   try { await mirrorKanban(); } catch (e) { log("mirrorKanban err", e.message); }
+  try { await mirrorMissionControl(); } catch (e) { log("mirrorMissionControl err", e.message); }
   try { await mirrorCrons(); } catch (e) { log("mirrorCrons err", e.message); }
   try { await mirrorHealth(); } catch (e) { log("mirrorHealth err", e.message); }
   try { await mirrorWiki(); } catch (e) { log("mirrorWiki err", e.message); }
