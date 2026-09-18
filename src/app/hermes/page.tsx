@@ -438,7 +438,7 @@ function TaskBoard({
     <>
       <SectionHeader
         label="Task board"
-        title="Hermes kanban"
+        title="Mission Control"
         action={
           <div className="flex items-center gap-3">
             <span className="num text-[12px] text-[var(--text-2)]">{total} total</span>
@@ -861,7 +861,7 @@ export default function HermesPage() {
         <section className="mt-12">
           {!loaded ? (
             <>
-              <SectionHeader label="Task board" title="Hermes kanban" />
+              <SectionHeader label="Task board" title="Mission Control" />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <Skeleton className="h-48" />
                 <Skeleton className="h-48" />
