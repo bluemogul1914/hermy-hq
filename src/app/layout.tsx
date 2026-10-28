@@ -25,8 +25,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" dir="ltr" className="dark">
-      <body className={`${geist.variable} ${geistMono.variable} ${geist.className} bg-[#0a0a0a] text-white min-h-screen`}>
+      <body className={`${geist.variable} ${geistMono.variable} ${geist.className} min-h-screen`}>
         <ConditionalLayout>{children}</ConditionalLayout>
+        <div className="wordmark-footer">BM</div>
       </body>
     </html>
   );

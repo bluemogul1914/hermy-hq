@@ -50,8 +50,55 @@
 }
 
 :root {
-  --background: #0a0b0d;
+  --background: #0a0f24;
   --foreground: #e7e8ea;
+}
+
+/* ── Navy gradient background ── */
+body {
+  background: linear-gradient(135deg, #0a0f24 0%, #1a1f3a 100%);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv01", "ss03", " calt", "kern";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Gold brand pill badge (top-left) ── */
+.brand-badge {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 100;
+  background: var(--gold-gradient);
+  color: #0a0f24;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.25);
+}
+
+/* ── Wordmark footer (bottom-left) ── */
+.wordmark-footer {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  z-index: 100;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.wordmark-footer::after {
+  content: " · blue mogul enterprise";
+  font-weight: 400;
+  opacity: 0.7;
 }
 
 @theme inline {
@@ -171,26 +218,31 @@ textarea, input {
    ═══════════════════════════════════════════════════════════ */
 :root {
   /* surface ladder — depth via lighter tiers, not shadows */
-  --bg:        #0a0b0d;   /* near-black, never #000 (avoids halation) */
-  --surface-1: #101113;   /* cards */
-  --surface-2: #16181b;   /* raised / hover */
-  --surface-3: #1e2024;   /* modals, highest tier */
+  --bg:        #0a0f24;   /* navy base */
+  --surface-1: #101428;   /* cards */
+  --surface-2: #171a34;   /* raised / hover */
+  --surface-3: #1e223e;   /* modals, highest tier */
 
   /* hairlines carry structure */
-  --line:        rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.13);
+  --line:        rgba(212, 175, 55, 0.16);
+  --line-strong: rgba(212, 175, 55, 0.28);
 
   /* text ramp (contrast-checked against surfaces) */
-  --text:   #e7e8ea;   /* primary  ~15:1 */
-  --text-2: #a0a3a8;   /* secondary ~7:1 */
-  --text-3: #6b6e74;   /* tertiary — labels/decorative */
-  --text-4: #4b4e54;   /* ghost — hairline captions */
+  --text:   #e7e8ea;   /* primary */
+  --text-2: #a0a3a8;   /* secondary */
+  --text-3: #6b6e74;   /* tertiary */
+  --text-4: #4b4e54;   /* ghost */
 
-  /* ONE brand accent (desaturated for dark) + semantic-only status */
-  --accent: #6ea8fe;
+  /* ONE brand accent — gold */
+  --accent: #d4af37;
+  /* semantic-only status */
   --up:     #5fd0a0;
   --down:   #f28b82;
   --warn:   #f5c451;
+
+  /* gold gradients for badges/buttons */
+  --gold-gradient: linear-gradient(135deg, #d4af37, #b8860b);
+  --gold-gradient-reverse: linear-gradient(135deg, #b8860b, #d4af37);
 
   /* radius — calm & precise, never toy-soft */
   --r-sm: 8px;
@@ -253,10 +305,10 @@ textarea, input {
   position: absolute;
   inset: -20%;
   background:
-    radial-gradient(72% 62% at 8% 6%, rgba(110, 168, 254, 0.14), transparent 70%),
-    radial-gradient(64% 62% at 92% 22%, rgba(95, 208, 160, 0.09), transparent 72%),
-    radial-gradient(70% 62% at 44% 80%, rgba(110, 168, 254, 0.07), transparent 74%),
-    radial-gradient(62% 60% at 98% 98%, rgba(95, 208, 160, 0.06), transparent 74%);
+    radial-gradient(72% 62% at 8% 6%, rgba(212, 175, 55, 0.14), transparent 70%),
+    radial-gradient(64% 62% at 92% 22%, rgba(212, 175, 55, 0.09), transparent 72%),
+    radial-gradient(70% 62% at 44% 80%, rgba(212, 175, 55, 0.07), transparent 74%),
+    radial-gradient(62% 60% at 98% 98%, rgba(212, 175, 55, 0.06), transparent 74%);
   filter: blur(48px);
   animation: aurora-drift 44s ease-in-out infinite;
   will-change: transform;
@@ -309,8 +361,8 @@ textarea, input {
 
 /* buttons — one filled primary in the whole system, rest are ghost */
 .btn-primary {
-  background: var(--text);
-  color: #0a0b0d;
+  background: var(--gold-gradient);
+  color: #0a0f24;
   font-weight: 600;
   border-radius: 9999px;
   transition: opacity 0.12s var(--ease), transform 0.12s var(--ease);

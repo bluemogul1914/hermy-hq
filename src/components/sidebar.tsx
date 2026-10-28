@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { signOut } from "next-auth/react";
 import {
   Home,
   Bot,
@@ -24,6 +25,20 @@ import {
   LayoutDashboard,
   Gauge,
   ExternalLink,
+  Terminal,
+  ShieldCheck,
+  Settings,
+  Mail,
+  Video,
+  Mic,
+  Timer,
+  LogOut,
+  Globe,
+  Database,
+  Calendar,
+  UserCheck,
+  Building,
+  Search,
 } from "lucide-react";
 
 const navGroups = [
@@ -32,9 +47,12 @@ const navGroups = [
     items: [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/hermes", label: "Agent", icon: Cpu },
+      { href: "/talk", label: "Chat", icon: MessagesSquare },
       { href: "/tasks", label: "Tasks", icon: ClipboardList },
-      { href: "/goals", label: "Goals", icon: Target },
-      { href: "/projects", label: "Projects", icon: Kanban },
+      { href: "/terminal", label: "Terminal", icon: Terminal },
+      { href: "/quality", label: "Quality Gate", icon: ShieldCheck },
+      { href: "/goals", label: "Kanban", icon: Kanban },
+      { href: "/projects", label: "Projects", icon: Target },
     ],
   },
   {
@@ -43,12 +61,27 @@ const navGroups = [
       { href: "/skills", label: "Skills", icon: Sparkles },
       { href: "/workspaces", label: "Workspaces", icon: Briefcase },
       { href: "/artifacts", label: "Artifacts", icon: Boxes },
+      { href: "/models", label: "Models", icon: Database },
+      { href: "/providers", label: "Providers", icon: Building },
+      { href: "/mcp", label: "Tools", icon: Sparkles },
+      { href: "/gateways", label: "Gateway", icon: Gauge },
+      { href: "/settings", label: "Settings", icon: Settings },
+    ],
+  },
+  {
+    name: "Discover",
+    items: [
+      { href: "/discover", label: "Discover", icon: Search },
+      { href: "/schedules", label: "Schedules", icon: Calendar },
     ],
   },
   {
     name: "Company",
     items: [
       { href: "/org", label: "Org", icon: Users },
+      { href: "/agents", label: "Profiles", icon: UserCheck },
+      { href: "/persona", label: "Persona", icon: Bot },
+      { href: "/office", label: "Office", icon: Building },
       { href: "/cost", label: "Cost", icon: Wallet },
       { href: "/activity", label: "Activity", icon: Activity },
     ],
@@ -57,8 +90,15 @@ const navGroups = [
     name: "Business",
     items: [
       { href: "/client-pulse", label: "Client Pulse", icon: HeartPulse },
-      { href: "/agents", label: "Agents", icon: Bot },
+      { href: "/email", label: "Email Inbox", icon: Mail },
       { href: "/memory-wiki", label: "Memory Wiki", icon: BookOpen },
+    ],
+  },
+  {
+    name: "Creative",
+    items: [
+      { href: "/video", label: "Video Generator", icon: Video },
+      { href: "/productivity", label: "Productivity", icon: Timer },
     ],
   },
   {
@@ -66,9 +106,10 @@ const navGroups = [
     name: "Peers",
     external: true,
     items: [
-      { href: "https://hermes.bluemogul.us", label: "Hermes Dashboard", icon: LayoutDashboard },
-      { href: "https://bmai.bluemogul.us", label: "BM AI — Chat", icon: MessagesSquare },
+      { href: "https://portal.bluemogul.us", label: "Portal", icon: Globe },
+      { href: "https://bluemogul.us", label: "Blue Mogul", icon: Globe },
       { href: "https://mission-control.bluemogul.us", label: "Mission Control", icon: Gauge },
+      { href: "https://hermes.bluemogul.us", label: "Hermes Dashboard", icon: LayoutDashboard },
     ],
   },
 ];
@@ -77,9 +118,10 @@ const navGroups = [
 const mobileTabsRaw = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/hermes", label: "Agent", icon: Cpu },
+  { href: "/talk", label: "Chat", icon: MessagesSquare },
   { href: "/tasks", label: "Tasks", icon: ClipboardList },
-  { href: "/goals", label: "Goals", icon: Target },
-  { href: "/client-pulse", label: "Clients", icon: HeartPulse },
+  { href: "/terminal", label: "Terminal", icon: Terminal },
+  { href: "/goals", label: "Kanban", icon: Kanban },
 ];
 
 export function Sidebar() {
@@ -251,13 +293,20 @@ export function Sidebar() {
 
         {/* Footer */}
         <div className="px-4 py-4 border-t border-[var(--line)]">
-          <div className="flex items-center gap-2 text-[var(--text-3)] text-[11.5px]">
+          <div className="flex items-center gap-2 text-[var(--text-3)] text-[11.5px] mb-2">
             <span className="relative flex w-1.5 h-1.5">
               <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--up)] opacity-60 animate-ping" />
               <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-[var(--up)]" />
             </span>
-            <span>All systems online</span>
+            <span className="hidden md:inline">All systems online</span>
           </div>
+          <button
+            onClick={() => signOut()}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface-1)] rounded-[8px] transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign out
+          </button>
         </div>
       </aside>
     </>

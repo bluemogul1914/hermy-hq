@@ -497,6 +497,37 @@ model HermesTask {
   @@index([status])
 }
 
+// ─── Mission Control: local mirror of gateway health probes ─────────────
+model GatewayHealthLog {
+  id          String   @id @default(cuid())
+  gatewayName String
+  gatewayUrl  String?
+  status      String   @default("unknown") // up | down | degraded | unknown
+  latencyMs   Int?
+  statusCode  Int?
+  detail      String?
+  probedAt    DateTime @default(now())
+
+  @@index([gatewayName])
+  @@index([probedAt])
+}
+
+// ─── Mission Control: quality gate reviews (mirrored from MC SQLite) ──────
+model QualityReview {
+  id           String   @id @default(cuid())
+  taskId       String
+  status       String   @default("pending") // pending | approved | rejected
+  score        Int?
+  reviewerId   String?
+  feedback     String?
+  evidenceJson Json?
+  createdAt    DateTime @default(now())
+  decidedAt    DateTime?
+
+  @@index([taskId])
+  @@index([status])
+}
+
 // ─── Hermes Memory Wiki (warm tier — git-tracked markdown, mirrored) ─────
 model HermesMemory {
   id         String    @id            // wiki entry slug (relative path w/o .md)

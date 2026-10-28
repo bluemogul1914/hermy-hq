@@ -11,7 +11,17 @@ import { useEffect, useState } from "react";
 import { Activity as ActivityIcon } from "lucide-react";
 import { rise, Panel, Pill, EmptyState } from "@/components/ui/kit";
 import { PageHeader, ErrorState, LoadingGrid, MiniBar } from "@/components/mc/ui";
-import { mcGetSafe } from "@/lib/mc";
+
+// Safe fetch for local aggregation routes
+async function fetchDashboard(): Promise<Dash | null> {
+  try {
+    const res = await fetch("/api/dashboard", { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as Dash;
+  } catch {
+    return null;
+  }
+}
 
 interface Dash {
   charts: {
@@ -47,7 +57,7 @@ export default function ActivityPage() {
 
   useEffect(() => {
     (async () => {
-      const d = await mcGetSafe<Dash>("/dashboard");
+      const d = await fetchDashboard();
       if (!d) setError("activity read failed");
       setDash(d ?? null);
     })();

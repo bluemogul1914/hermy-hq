@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import OfficeView from "@/components/OfficeView";
+import { AgentChat, ChatAgent } from "@/components/AgentChat";
 
 interface AgentActivity {
   timestamp: string;
@@ -18,6 +19,8 @@ interface Agent {
   status: string;
   currentTask?: string;
   lastActive?: string;
+  channel?: string;
+  secondsSinceHeartbeat?: number;
   tasksCompleted: number;
   totalCost: number;
   recentActivity: AgentActivity[];
@@ -34,13 +37,34 @@ const statusConfig: Record<string, { color: string; dot: string; label: string; 
 };
 
 const roleColors: Record<string, string> = {
-  aria: "from-amber-500/20 to-amber-600/5 border-amber-500/20",
-  "cto-orion": "from-sky-500/20 to-sky-600/5 border-sky-500/20",
-  cloudmaster: "from-cyan-500/20 to-cyan-600/5 border-cyan-500/20",
-  foreman: "from-orange-500/20 to-orange-600/5 border-orange-500/20",
-  morgan: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/20",
-  cro: "from-purple-500/20 to-purple-600/5 border-purple-500/20",
-  dealer: "from-blue-500/20 to-blue-600/5 border-blue-500/20",
+  jackie:      "from-indigo-500/20 to-indigo-600/5 border-indigo-500/20",
+  hunter:      "from-amber-500/20 to-amber-600/5 border-amber-500/20",
+  closer:      "from-rose-500/20 to-rose-600/5 border-rose-500/20",
+  dev:         "from-cyan-500/20 to-cyan-600/5 border-cyan-500/20",
+  warden:      "from-emerald-500/20 to-emerald-600/5 border-emerald-500/20",
+  cloudmaster: "from-sky-500/20 to-sky-600/5 border-sky-500/20",
+  scout:       "from-purple-500/20 to-purple-600/5 border-purple-500/20",
+  forge:       "from-orange-500/20 to-orange-600/5 border-orange-500/20",
+  muse:        "from-pink-500/20 to-pink-600/5 border-pink-500/20",
+  strategist:  "from-amber-500/20 to-amber-600/5 border-amber-500/20",
+  lex:         "from-slate-500/20 to-slate-600/5 border-slate-500/20",
+  accountant:  "from-green-500/20 to-green-600/5 border-green-500/20",
+  publisher:   "from-blue-500/20 to-blue-600/5 border-blue-500/20",
+  pathfinder:  "from-lime-500/20 to-lime-600/5 border-lime-500/20",
+  pixel:       "from-fuchsia-500/20 to-fuchsia-600/5 border-fuchsia-500/20",
+  sentinel:    "from-red-500/20 to-red-600/5 border-red-500/20",
+  mentor:      "from-yellow-500/20 to-yellow-600/5 border-yellow-500/20",
+  veritas:     "from-teal-500/20 to-teal-600/5 border-teal-500/20",
+  atlas:       "from-indigo-500/20 to-indigo-600/5 border-indigo-500/20",
+  scribe:      "from-stone-500/20 to-stone-600/5 border-stone-500/20",
+  care:        "from-rose-500/20 to-rose-600/5 border-rose-500/20",
+  coursebuilder:"from-indigo-500/20 to-indigo-600/5 border-indigo-500/20",
+  jcode:       "from-cyan-500/20 to-cyan-600/5 border-cyan-500/20",
+  cro:         "from-purple-500/20 to-purple-600/5 border-purple-500/20",
+  cmo:         "from-pink-500/20 to-pink-600/5 border-pink-500/20",
+  commander:   "from-amber-500/20 to-amber-600/5 border-amber-500/20",
+  coo:         "from-emerald-500/20 to-emerald-600/5 border-emerald-500/20",
+  guardian:    "from-red-500/20 to-red-600/5 border-red-500/20",
 };
 
 function timeAgo(dateStr: string): string {
@@ -172,104 +196,12 @@ function OrgChart({ agents }: { agents: Agent[] }) {
   );
 }
 
-// ── Live Agent Chat ───────────────────────────────────────
-function AgentChat({ agent, onClose }: { agent: Agent; onClose: () => void }) {
-  const [input, setInput] = useState("");
-  const [msgs, setMsgs] = useState<{ role: "user"|"assistant"; content: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
-
-  async function send() {
-    const text = input.trim();
-    if (!text || loading) return;
-    setInput("");
-    const newMsgs = [...msgs, { role: "user" as const, content: text }];
-    setMsgs(newMsgs);
-    setLoading(true);
-    try {
-      const r = await fetch("/api/agent-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: agent.id, message: text, history: msgs }),
-      });
-      const d = await r.json() as { reply: string };
-      setMsgs([...newMsgs, { role: "assistant", content: d.reply }]);
-    } catch {
-      setMsgs([...newMsgs, { role: "assistant", content: "Sorry, something went wrong. Try again." }]);
-    }
-    setLoading(false);
-  }
-
-  const agentColor = roleColors[agent.id]?.split(" ")[0]?.replace("from-","text-")?.replace("/20","") || "text-[var(--text-3)]";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="elevated w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid var(--line)" }}>
-          <div className="text-2xl">{agent.emoji}</div>
-          <div>
-            <div className="text-[14px] font-semibold text-[var(--text)]">{agent.name}</div>
-            <div className="text-[12px] text-[var(--text-3)]">{agent.role}</div>
-          </div>
-          <button onClick={onClose} className="ml-auto text-[var(--text-3)] hover:text-[var(--text)] transition-colors text-xl leading-none">×</button>
-        </div>
-        {/* Messages */}
-        <div className="h-80 overflow-y-auto p-4 space-y-3 flex flex-col" style={{ background: "var(--surface-1)" }}>
-          {msgs.length === 0 && (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-[var(--text-3)] text-[13px] text-center">Ask {agent.name} anything.<br/>They&apos;re ready.</p>
-            </div>
-          )}
-          {msgs.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className="max-w-[80%] rounded-[var(--r-md)] px-3.5 py-2 text-[13px] leading-relaxed"
-                style={m.role === "user"
-                  ? { background: "var(--surface-3)", color: "var(--text)" }
-                  : { background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text-2)" }}>
-                {m.role === "assistant" && <span className="text-xs mr-1">{agent.emoji}</span>}
-                {m.content}
-              </div>
-            </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="rounded-[var(--r-md)] px-3.5 py-2" style={{ background: "var(--surface-2)", border: "1px solid var(--line)" }}>
-                <span className="text-[var(--text-3)] text-[13px]">{agent.emoji} thinking…</span>
-              </div>
-            </div>
-          )}
-          <div ref={endRef} />
-        </div>
-        {/* Input */}
-        <div className="flex gap-2 p-3" style={{ borderTop: "1px solid var(--line)" }}>
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
-            placeholder={`Message ${agent.name}…`}
-            className="flex-1 rounded-full px-4 py-2 text-[13px] text-[var(--text)] focus:outline-none transition-colors"
-            style={{ background: "var(--surface-1)", border: "1px solid var(--line)" }}
-          />
-          <button
-            onClick={send}
-            disabled={!input.trim() || loading}
-            className="btn-primary px-4 py-2 text-[13px]"
-          >Send</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [view, setView] = useState<"cards" | "office">("office");
-  const [chatAgent, setChatAgent] = useState<Agent | null>(null);
+  const [chatAgent, setChatAgent] = useState<ChatAgent | null>(null);
 
   const loadAgents = useCallback(async () => {
     try {
@@ -360,17 +292,19 @@ export default function AgentsPage() {
       {/* Office View */}
       {view === "office" && (
         <>
-          <OfficeView agents={agents} />
+          <OfficeView agents={agents} onChat={(a) => setChatAgent(a)} />
           {/* Chat quick-launch strip */}
           <div className="flex flex-wrap gap-2 pt-2">
-            {teamAgents.map(a => (
-              <button key={a.id} onClick={() => setChatAgent(a)}
+            {teamAgents
+              .filter((a) => a.status !== "offline")
+              .map((a) => (
+                <button key={a.id} onClick={() => setChatAgent(a)}
                 className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[12px] text-[var(--text-2)] transition-colors panel-interactive"
                 style={{ background: "var(--surface-1)", border: "1px solid var(--line)" }}>
                 <span>{a.emoji}</span> Chat with {a.name}
               </button>
             ))}
-            {ceoAgent && (
+            {ceoAgent && ceoAgent.status !== "offline" && (
               <button onClick={() => setChatAgent(ceoAgent)}
                 className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[12px] transition-colors"
                 style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 28%, transparent)" }}>

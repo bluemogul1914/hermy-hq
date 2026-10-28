@@ -137,7 +137,7 @@ async function mirrorKanban() {
  */
 async function mcGet(pathname) {
   const res = await fetch(`${MC_URL}${pathname}`, {
-    headers: { "x-mc-token": MC_TOKEN, "user-agent": UA, accept: "application/json" },
+    headers: { "Authorization": `Bearer ${MC_TOKEN}`, "user-agent": UA, accept: "application/json" },
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`${pathname} -> HTTP ${res.status}`);
@@ -147,11 +147,12 @@ async function mcGet(pathname) {
 async function mirrorMissionControl() {
   if (!MC_MIRROR) return;
 
-  let board;
-  try { board = await mcGet("/api/board"); }
-  catch (e) { log("MC board failed:", e.message); return; }
+  // MC's task endpoint returns { ok, tasks: [...], count }.
+  let mcTasks;
+  try { mcTasks = await mcGet("/api/tasks"); }
+  catch (e) { log("MC tasks failed:", e.message); return; }
 
-  const tasks = Object.values(board || {}).flat().filter((t) => t && t.id != null);
+  const tasks = Array.isArray(mcTasks?.tasks) ? mcTasks.tasks : [];
   const seen = new Set();
   for (const t of tasks) {
     const id = `mc-${t.id}`;                    // namespaced so the kanban prune can't collide
@@ -236,6 +237,47 @@ async function mirrorCost() {
       });
       return;
     } catch { /* try next arg shape */ }
+  }
+}
+
+/* ─────────── PULL: Gateway health probe loop ───────────
+ * The MC server exposes gateway health endpoints but has no background
+ * ticker. The bridge fills that gap by periodically fetching the live
+ * GatewayHealth record from MC and mirroring it into the local
+ * GatewayHealthLog table (used by the hermy-hq Gateways tab).
+ */
+async function probeGateways() {
+  if (!MC_URL || !MC_TOKEN) return;
+  let health;
+  try { health = await mcGet("/api/gateways/health"); }
+  catch (e) { log("MC gateway health failed:", e.message.split("\n")[0]); return; }
+
+  const gateways = health?.gateways || [];
+  for (const g of gateways) {
+    // Mirror each gateway's latest probe into local Postgres
+    await q(
+      `INSERT INTO "GatewayHealthLog" (id, "gatewayName", "gatewayUrl", status, "latencyMs", "statusCode", detail, "probedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, to_timestamp($8))
+       ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, "latencyMs"=EXCLUDED."latencyMs",
+         "statusCode"=EXCLUDED."statusCode", detail=EXCLUDED.detail, "probedAt"=EXCLUDED."probedAt"`,
+      [
+        g.gateway_id || randomUUID(),
+        g.gateway_id || "unknown",
+        g.url || null,
+        g.status || "unknown",
+        g.latency_ms || null,
+        g.status_code || null,
+        g.error || null,
+        g.probed_at || Math.floor(Date.now() / 1000),
+      ]
+    );
+  }
+  if (gateways.length) {
+    await setStore("gateway-health", {
+      gateways,
+      syncedAt: new Date().toISOString(),
+      count: gateways.length,
+    });
   }
 }
 
@@ -522,6 +564,8 @@ async function mirrorTick() {
   try { await mirrorCost(); } catch (e) { log("mirrorCost err", e.message); }
   try { await mirrorSkills(); } catch (e) { log("mirrorSkills err", e.message); }
   try { await maybeDailyBrief(); } catch (e) { log("maybeDailyBrief err", e.message); }
+  // Mirror gateway health from MC into local Postgres (fills the probe gap)
+  try { await probeGateways(); } catch (e) { log("probeGateways err", e.message); }
 }
 
 async function main() {

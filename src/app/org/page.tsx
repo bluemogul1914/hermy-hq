@@ -39,17 +39,60 @@ const HEALTH_COLOR: Record<Agent["health"] | "none", string> = {
   none: "var(--text-4)",
 };
 
+// Map MC /api/status agent format to the Org page's Agent interface.
+// MC v2026.10.24 returns {id, name, status, last_activity, ...}
+// while older MC versions returned {agent_name, health, last_heartbeat, ...}.
+function mapMcAgent(s: any): Agent {
+  const now = Date.now() / 1000;
+  const lastActivity = s.last_heartbeat || s.last_activity;
+  const secondsSince = lastActivity
+    ? Math.max(0, Math.floor(now - lastActivity))
+    : null;
+
+  let health: Agent["health"] = "grey";
+  if (s.health) {
+    health = s.health;
+  } else if (s.status) {
+    const mcStatus = String(s.status).toLowerCase();
+    if (mcStatus.includes("online") || mcStatus.includes("active") || mcStatus.includes("working") || mcStatus.includes("up")) {
+      health = "green";
+    } else if (mcStatus.includes("idle") || mcStatus.includes("stale")) {
+      health = "yellow";
+    } else if (mcStatus.includes("offline") || mcStatus.includes("dead") || mcStatus.includes("down")) {
+      health = "red";
+    }
+  }
+
+  return {
+    agent_name: s.agent_name || s.name || s.id || "",
+    channel: s.channel || null,
+    status: s.status || "unknown",
+    current_task: s.current_task || null,
+    last_heartbeat: lastActivity ? new Date(lastActivity * 1000).toISOString() : null,
+    seconds_since_heartbeat: secondsSince,
+    health,
+  };
+}
+
 export default function OrgPage() {
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const d = await mcGetSafe<Agent[]>("/status");
-      if (!d) setError("status read failed");
-      setAgents(d ?? []);
-    })();
-  }, []);
+useEffect(() => {
+  (async () => {
+    const d = await mcGetSafe<{ agents?: any[] } | any[]>("/status");
+    if (!d) {
+      setError("status read failed");
+      setAgents([]);
+      return;
+    }
+    // MC wraps agents in { agents: [...] } around v2026.10.24
+    const mcAgents: any[] = Array.isArray(d)
+      ? (d as any[])
+      : (d as { agents?: any[] }).agents ?? [];
+    setAgents(mcAgents.map(mapMcAgent));
+  })();
+}, []);
 
   if (error && !agents) {
     return (

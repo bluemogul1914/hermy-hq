@@ -11,7 +11,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { rise, Panel, Pill, Skeleton, EmptyState } from "@/components/ui/kit";
 import { PageHeader, StatCard, ErrorState, LoadingGrid, MiniBar } from "@/components/mc/ui";
-import { mcGetSafe } from "@/lib/mc";
 
 interface Dash {
   stats: {
@@ -81,6 +80,17 @@ async function mcAction(
   return { ok: true };
 }
 
+// Safe fetch for local aggregation routes (/api/dashboard, /api/board)
+async function safeFetch<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(path, { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 export default function DashboardPage() {
   const [dash, setDash] = useState<Dash | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
@@ -88,11 +98,12 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState<number | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [mcp, setMcp] = useState<any>(null);
 
   async function reload() {
     const [d, b] = await Promise.all([
-      mcGetSafe<Dash>("/dashboard"),
-      mcGetSafe<Board>("/board"),
+      safeFetch<Dash>("/api/dashboard"),
+      safeFetch<Board>("/api/board"),
     ]);
     if (d) setDash(d);
     if (b) setBoard(b);
@@ -121,8 +132,8 @@ export default function DashboardPage() {
     let alive = true;
     (async () => {
       const [d, b] = await Promise.all([
-        mcGetSafe<Dash>("/dashboard"),
-        mcGetSafe<Board>("/board"),
+        safeFetch<Dash>("/api/dashboard"),
+        safeFetch<Board>("/api/board"),
       ]);
       if (!alive) return;
       if (!d) setError("dashboard read failed");
@@ -130,10 +141,15 @@ export default function DashboardPage() {
       setBoard(b);
       setLoading(false);
     })();
+    // Fetch MCP server status
+    fetch("/api/mcp/status", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : null)
+      .then(setMcp)
+      .catch(() => setMcp(null));
     const iv = setInterval(() => {
       Promise.all([
-        mcGetSafe<Dash>("/dashboard"),
-        mcGetSafe<Board>("/board"),
+        safeFetch<Dash>("/api/dashboard"),
+        safeFetch<Board>("/api/board"),
       ]).then(([d, b]) => {
         if (d) setDash(d);
         if (b) setBoard(b);
@@ -189,6 +205,53 @@ export default function DashboardPage() {
           format={(n) => (n == null ? "—" : `${n}%`)}
           accent="#22c55e" helper={`${success?.completed ?? 0}/${success?.total ?? 0} tasks done`} />
       </div>
+
+      {/* MCP Integrations */}
+      {mcp && (
+        <div className="mt-6 hq-rise" style={rise(1)}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="eyebrow">MCP Integrations</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Panel className="p-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-[var(--r-sm)] flex items-center justify-center text-lg shrink-0"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--line-strong)" }}>☁️</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium text-[var(--text)]">Nextcloud</div>
+                  <div className="text-[11.5px] text-[var(--text-3)]">v{mcp.nextcloud?.version} · {mcp.nextcloud?.apps} apps</div>
+                  <div className="text-[11px] text-[var(--text-4)] mt-0.5">{mcp.nextcloud?.deck_boards?.length || 0} Deck boards</div>
+                </div>
+                <Pill tone="up">● Connected</Pill>
+              </div>
+            </Panel>
+            <Panel className="p-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-[var(--r-sm)] flex items-center justify-center text-lg shrink-0"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--line-strong)" }}>🧠</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium text-[var(--text)]">Codebase Memory</div>
+                  <div className="text-[11.5px] text-[var(--text-3)]">
+                    {mcp.codebase_memory?.indexed ? "Indexed" : "Not indexed"}
+                  </div>
+                </div>
+                <Pill tone={mcp.codebase_memory?.indexed ? "up" : "warn"}>● {mcp.codebase_memory?.indexed ? "Ready" : "Pending"}</Pill>
+              </div>
+            </Panel>
+            <Panel className="p-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-[var(--r-sm)] flex items-center justify-center text-lg shrink-0"
+                  style={{ background: "var(--surface-2)", border: "1px solid var(--line-strong)" }}>🔍</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium text-[var(--text)]">Session Search</div>
+                  <div className="text-[11.5px] text-[var(--text-3)]">Conversation history indexing</div>
+                </div>
+                <Pill tone="up">● Connected</Pill>
+              </div>
+            </Panel>
+          </div>
+        </div>
+      )}
 
       {/* Activity + Board */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6">
