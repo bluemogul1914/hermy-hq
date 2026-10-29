@@ -43,6 +43,7 @@ interface Req {
   kind: string;
   title: string;
   prompt: string | null;
+  profile: string;
   sideEffecting: boolean;
   status: ReqStatus;
   result: string | null;
@@ -192,6 +193,7 @@ function HealthChip({ health }: { health: Health | null }) {
 function DispatchBar({ onDone }: { onDone: () => void }) {
   const [text, setText] = useState("");
   const [side, setSide] = useState(false);
+  const [profile, setProfile] = useState("default");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,7 +213,7 @@ function DispatchBar({ onDone }: { onDone: () => void }) {
       const r = await fetch("/api/hermes/dispatch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "oneshot", title, sideEffecting: side }),
+        body: JSON.stringify({ kind: "oneshot", title, profile, sideEffecting: side }),
       });
       if (r.ok) {
         setText("");
@@ -243,6 +245,16 @@ function DispatchBar({ onDone }: { onDone: () => void }) {
           placeholder="Ask or tell Hermes to do something…"
           className="flex-1 min-w-0 bg-transparent text-[14px] text-[var(--text)] placeholder:text-[var(--text-3)] px-3.5 py-2.5 rounded-[10px] border border-[var(--line)] focus:border-[color-mix(in_srgb,var(--accent)_45%,transparent)] outline-none transition-colors"
         />
+        <select
+          value={profile}
+          onChange={(e) => setProfile(e.target.value)}
+          className="shrink-0 bg-[var(--surface-2)] text-[13px] text-[var(--text-2)] px-3 py-1.5 rounded-[8px] border border-[var(--line)] outline-none focus:border-[color-mix(in_srgb,var(--accent)_45%,transparent)] transition-colors"
+        >
+          <option value="default">Default</option>
+          <option value="forge">Forge</option>
+          <option value="jcode">JCODE</option>
+          <option value="veritas">VERITAS</option>
+        </select>
         <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"

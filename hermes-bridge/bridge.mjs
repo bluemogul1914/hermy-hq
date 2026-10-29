@@ -180,7 +180,9 @@ async function mirrorMissionControl() {
 
   // Goal tree (MRR milestones + service lines) → DataStore for the cockpit UI.
   try {
-    const goals = await mcGet("/api/goals");
+    let goals;
+    try { goals = await mcGet("/api/goals"); }
+    catch { goals = (await mcGet("/api/missions")).missions || await mcGet("/api/missions"); }
     await setStore("mc-goals", { goals, syncedAt: new Date().toISOString() });
   } catch (e) { log("MC goals failed:", e.message); }
 
@@ -496,7 +498,9 @@ async function runRequest(r) {
   try {
     let result = "";
     if (r.kind === "oneshot" || r.kind === "chat") {
-      result = (await hermes(["-z", r.prompt || r.title], { timeout: RUN_TIMEOUT_MS })).trim();
+      const args = ["-z", r.prompt || r.title];
+      if (r.profile && r.profile !== "default") args.splice(0, 0, "-p", r.profile);
+      result = (await hermes(args, { timeout: RUN_TIMEOUT_MS })).trim();
     } else if (r.kind === "kanban") {
       result = (await hermes(["kanban", "--board", BOARD, "create", "--json", r.title], { timeout: 20000 })).trim();
     } else if (r.kind.startsWith("cron.")) {

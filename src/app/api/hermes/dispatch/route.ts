@@ -14,6 +14,7 @@ export async function POST(req: Request) {
       kind: (b.kind || "oneshot").toString(),
       title: title.slice(0, 200),
       prompt: (b.prompt ?? b.title ?? "").toString() || null,
+      profile: b.profile || "default",
       sideEffecting,
       status: sideEffecting ? "awaiting_approval" : "queued",
     },
