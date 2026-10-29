@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { MessageCircle, Clock } from "lucide-react";
+import VirtualCity from "@/components/VirtualCity";
 
 /* ───────────────────────────────────────────────────────────
    Blue Mogul AI · OfficeView — The virtual office floor.
@@ -288,6 +289,10 @@ export default function OfficeView({
   const ranked = ceo ? [ceo, ...agents.filter((a) => a.id !== ceo.id)] : agents;
   const legend = ["working", "idle", "offline", "error"];
 
+  // 3D city view toggle — default is the 2D org chart (unchanged).
+  // Toggling does NOT unmount the roster, so 2D state is preserved.
+  const [cityMode, setCityMode] = useState(false);
+
   const online = agents.filter((a) => a.status !== "offline").length;
   const working = agents.filter((a) => a.status === "working" || a.status === "active").length;
 
@@ -326,6 +331,29 @@ export default function OfficeView({
             </span>
             <div className="w-2 h-2 rounded-full bg-[var(--up)] animate-pulse" />
           </div>
+
+          {/* 3D City toggle — swaps the org tree for VirtualCity */}
+          <button
+            type="button"
+            aria-label="Toggle 3D city mode"
+            aria-pressed={cityMode}
+            onClick={() => setCityMode((v) => !v)}
+            className="ml-3 px-3.5 py-1.5 rounded-full text-[11px] font-mono font-semibold tracking-[0.15em] uppercase transition-all"
+            style={{
+              background: cityMode
+                ? "color-mix(in srgb, var(--accent) 18%, transparent)"
+                : "var(--surface-1)",
+              border: `1px solid ${
+                cityMode ? "var(--accent)" : "var(--line)"
+              }`,
+              color: cityMode ? "var(--accent)" : "var(--text-2)",
+              boxShadow: cityMode
+                ? "0 0 14px color-mix(in srgb, var(--accent) 30%, transparent)"
+                : "none",
+            }}
+          >
+            {cityMode ? "2D Org" : "3D City"}
+          </button>
         </div>
 
         {/* Live stats bar */}
@@ -350,18 +378,26 @@ export default function OfficeView({
           </div>
         </div>
 
-        {/* Org chart tree */}
-        <div className="flex justify-center overflow-x-auto">
-          <div className="flex flex-col items-center min-w-max">
-            {ceo ? (
-              <OrgBranch agent={ceo} agents={agents} onChat={onChat} />
-            ) : (
-              <div className="text-[12px] text-[var(--text-3)]">
-                No roster loaded.
-              </div>
-            )}
+        {/* Org chart tree (2D) OR 3D city — toggled by the header button.
+            Only the tree block swaps; the header, stats, ticker and legend
+            stay mounted, so 2D state is preserved across toggle. */}
+        {cityMode ? (
+          <div className="h-[560px] w-full">
+            <VirtualCity agents={agents} />
           </div>
-        </div>
+        ) : (
+          <div className="flex justify-center overflow-x-auto">
+            <div className="flex flex-col items-center min-w-max">
+              {ceo ? (
+                <OrgBranch agent={ceo} agents={agents} onChat={onChat} />
+              ) : (
+                <div className="text-[12px] text-[var(--text-3)]">
+                  No roster loaded.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Activity ticker — my-virtual-world: recent agent activity scrolls */}
         <div className="mt-8">
