@@ -8,34 +8,10 @@ import VirtualCity, {
 } from "@/components/VirtualCity";
 
 /* ───────────────────────────────────────────────────────────
-   jsdom cannot host a WebGL canvas, so @react-three/fiber's real
-   <Canvas> cannot initialize here. Stub the 3D renderer to plain DOM
-   so the component wiring can be asserted structurally & headless-safe:
-     • <Canvas>   → renders its scene-graph children as a div
-     • drei <Html> → one div per agent marker (each AgentMarker renders
-                      exactly one Html label → 1:1 marker proxy)
-   `three` is imported only as a type by VirtualCity, so it is never
-   loaded at runtime in this test.
-   Uses only core vitest matchers so the test stays type-safe under Vitest.
+   Canvas 2D isometric city smoke tests.
+   The component renders a single <canvas data-testid="city-canvas">
+   with no DOM children, so we assert structural presence only.
    ─────────────────────────────────────────────────────────── */
-vi.mock("@react-three/fiber", () => ({
-  Canvas: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="city-canvas">{children}</div>
-  ),
-  useFrame: () => {},
-  useThree: () => ({ scene: { add: () => {}, remove: () => {} } }),
-  extend: () => {},
-}));
-
-vi.mock("@react-three/drei", () => ({
-  Html: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="city-marker">{children}</div>
-  ),
-  Text: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="city-text">{children}</div>
-  ),
-  OrbitControls: () => <div data-testid="city-controls" />,
-}));
 
 const roster: Agent[] = [
   {
@@ -144,45 +120,35 @@ describe("statusColor — Calm Luxury status → marker color", () => {
 });
 
 describe("VirtualCity smoke test", () => {
-  test("renders one 3D marker per agent in the roster", () => {
+  test("renders a canvas element for the city", () => {
     render(<VirtualCity agents={roster} />);
-
     expect(screen.getByTestId("city-canvas")).toBeTruthy();
-    expect(screen.getAllByTestId("city-marker")).toHaveLength(roster.length);
-
-    // each marker's label carries the agent's name
-    roster.forEach((a) => {
-      expect(screen.getByText(a.name)).toBeTruthy();
-    });
   });
 
-  test("renders zero markers for an empty roster", () => {
+  test("renders without crashing for an empty roster", () => {
     render(<VirtualCity agents={[]} />);
     expect(screen.getByTestId("city-canvas")).toBeTruthy();
-    expect(screen.queryByTestId("city-marker")).toBeFalsy();
   });
 });
 
-describe("OfficeView 3D City toggle", () => {
-  test("defaults to 2D org chart; toggle swaps to 3D city and back with no state loss", () => {
+describe("OfficeView 2D/3D toggle", () => {
+  test("defaults to 2D org chart; toggle swaps to city and back", () => {
     render(<OfficeView agents={roster} onChat={() => {}} />);
 
     // 2D org chart is the default render
-    expect(screen.getByText("CEO")).toBeTruthy(); // ceo role on the ceo card
+    expect(screen.getByText("CEO")).toBeTruthy();
     expect(screen.queryByTestId("city-canvas")).toBeFalsy();
 
     const toggle = screen.getByRole("button", { name: /toggle 3d city mode/i });
 
-    // → flip to 3D city
+    // flip to city
     fireEvent.click(toggle);
     expect(screen.getByTestId("city-canvas")).toBeTruthy();
-    expect(screen.getAllByTestId("city-marker")).toHaveLength(roster.length);
-    // 2D org tree (role label) is no longer in the chart
     expect(screen.queryByText("CEO")).toBeFalsy();
 
-    // → flip back to 2D: original 2D state is restored, not lost
+    // flip back to 2D: original state restored
     fireEvent.click(toggle);
     expect(screen.queryByTestId("city-canvas")).toBeFalsy();
-    expect(screen.getByText("CEO")).toBeTruthy(); // 2D state intact
+    expect(screen.getByText("CEO")).toBeTruthy();
   });
 });
